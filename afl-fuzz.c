@@ -5357,6 +5357,8 @@ void error(const char *msg) { perror(msg); exit(0); }
 // https://stackoverflow.com/questions/2725385/standard-c-library-for-escaping-a-string
 int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *temp_len) {
 
+  char *hardcoded_src = "contract C { uint immutable x = 0; }";
+
     // TODO: Escape string quotes
     char *body = malloc(8192);
     sprintf(body, "{\
@@ -5365,7 +5367,7 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
 \"rewrite\":\"%s\",\
 \"language\":\".c\",\
 \"id\":0\
-}", *out_buf, match, rewrite);
+}", hardcoded_src, match, rewrite);
 
     portno = portno > 0 ? portno : 80;
     host = strlen(host) > 0 ? host : "localhost";
@@ -5383,6 +5385,8 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
     message_size+=strlen("%s %s HTTP/1.0\r\n");
     message_size+=strlen("POST");                         /* method         */
     message_size+=strlen("/mutate");                      /* path           */
+    // TODO: try keep-alive but need to create socket only once. Looks like full major GC avoids on server, so its connection pool is empty I think.
+    message_size+=strlen("Content-Type: application/json\r\n");   /* content-type */
     message_size+=strlen("Content-Length: %lu\r\n")+10;   /* content length */
     message_size+=strlen("\r\n");                         /* blank line     */
     message_size+=strlen(body);                           /* body           */
@@ -5392,6 +5396,7 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
 
     /* fill in the parameters */
     sprintf(message,"%s %s HTTP/1.0\r\n", "POST", "/mutate");
+    strcat(message, "Content-Type: application/json\r\n");
     sprintf(message+strlen(message), "Content-Length: %lu\r\n", strlen(body));
     strcat(message,"\r\n");            /* blank line     */
     strcat(message, body);             /* body           */
@@ -5443,7 +5448,7 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
     } while (received < total);
 
     if (received == total){
-      printf("Response:\n%s\n",response);
+      // printf("Response:\n%s\n",response);
       error("ERROR storing complete response from socket");
     }
     response[received] = '\0';
@@ -6658,7 +6663,7 @@ havoc_stage:
       if (UR(64) < P_MUTATION_TOOL) {
         mutated = use_mutation_tool(&out_buf, &temp_len); // suppress compiler warning
         // printf("OUT BUF BEFORE: %s |\n", out_buf);
-        mutated = post("localhost", 4444, "{:[1]}", "{}", &out_buf, &temp_len);
+        mutated = post("localhost", 4448, "{:[1]}", "{}", &out_buf, &temp_len);
         // printf("OUT BUF AFTER: %s |\n", out_buf);
       }
 
