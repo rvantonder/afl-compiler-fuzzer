@@ -5353,21 +5353,73 @@ static int use_mutation_tool(u8 **out_buf, s32* temp_len) {
 
 void error(const char *msg) { perror(msg); exit(0); }
 
+void escape(char *in, char *out) {
+    while (*in) {
+        switch (*in) {
+        case '\\':
+        case '"':
+            *(out++) = '\\';
+            *(out++) = *in;
+            break;
+        case '\n':
+            *(out++) = '\\';
+            *(out++) = 'n';
+            break;
+        case '\r':
+            *(out++) = '\\';
+            *(out++) = 'r';
+            break;
+        case '\b':
+            *(out++) = '\\';
+            *(out++) = 'b';
+            break;
+        case '\f':
+            *(out++) = '\\';
+            *(out++) = 'f';
+            break;
+        case '\t':
+            *(out++) = '\\';
+            *(out++) = 't';
+            break;
+        default:
+            *(out++) = *in;
+            break;
+        }
+        in++;
+    }
+}
+
 // {"source":"main() { ... }","match":"main() {:[1]}","rewrite":"main() { derp }","language":".generic","id":0}
 // https://stackoverflow.com/questions/2725385/standard-c-library-for-escaping-a-string
 int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *temp_len) {
 
-  char *hardcoded_src = "contract C { uint immutable x = 0; }";
+  // char *hardcoded_src = "contract C { uint immutable x = 0; }";
+
+	for (int i = 0; i < *temp_len; i++) {
+		if (!isascii((*out_buf)[i])) {
+            // printf("NOT ASCII\n");
+			return 0;
+		}
+	}
+
+    char *temp_prog = malloc(8192);
+    printf("BEFORE ESCAPE: %s\n", out_buf);
+    snprintf(temp_prog, *temp_len, "%s", *out_buf);
+    char *prog = malloc(8192);
+    escape(temp_prog, prog);
+    prog[(*temp_len)+1] = '\0';
 
     // TODO: Escape string quotes
     char *body = malloc(8192);
     sprintf(body, "{\
-\"source\":\"%s\",\
-\"match\":\"%s\",\
-\"rewrite\":\"%s\",\
-\"language\":\".c\",\
+\"source\":\"%s\", \
+\"match\":\"%s\", \
+\"rewrite\":\"%s\", \
+\"language\":\".c\", \
 \"id\":0\
-}", hardcoded_src, match, rewrite);
+}", prog /* hardcoded_src */, match, rewrite);
+
+	printf("sent ->%s<-\n", prog);
 
     portno = portno > 0 ? portno : 80;
     host = strlen(host) > 0 ? host : "localhost";
@@ -5378,6 +5430,7 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
     char *message;
 
     int response_sz = 8192;
+    int skip_response_lines = 8; // skip this many line sin an HTTP response to get to the mutated content
     char *response = malloc(response_sz);
 
     /* How big is the message? */
@@ -5462,11 +5515,11 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
     /* process response */
     // printf("Response:\n%s\n",response);
 
-    // advance past 6 lines to get the body
+    // advance past 8 lines to get the body
     char* advance;
     advance = response;
     int line = 0;
-    while (line != 6) {
+    while (line != skip_response_lines) {
       if (*advance == '\0') {
         break;
       }
@@ -5476,7 +5529,7 @@ int post(char *host, int portno, char *match, char *rewrite, u8 **out_buf, s32 *
       advance++;
     }
 
-    if (line != 6) {
+    if (line != skip_response_lines) {
       free(response);
       return 0;
     }
@@ -6663,12 +6716,12 @@ havoc_stage:
       if (UR(64) < P_MUTATION_TOOL) {
         mutated = use_mutation_tool(&out_buf, &temp_len); // suppress compiler warning
         // printf("OUT BUF BEFORE: %s |\n", out_buf);
-        mutated = post("localhost", 4448, "{:[1]}", "{}", &out_buf, &temp_len);
+        mutated = post("localhost", 4448, "ignore", "ignore", &out_buf, &temp_len);
         // printf("OUT BUF AFTER: %s |\n", out_buf);
       }
 
       if (mutated) {
-        // printf("Got mutated %s\n", out_buf);
+        printf("got mutated --->%s<---\n", out_buf);
       }
 
       if (!mutated)
