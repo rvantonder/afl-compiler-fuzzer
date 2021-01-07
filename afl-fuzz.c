@@ -5355,6 +5355,7 @@ void error(const char *msg) { perror(msg); exit(0); }
 
 #define RESPONSE_OFFSET 8
 #define DEBUG_POST 0
+#define RESPONSE_SIZE 819200
 
 int post(char *host, int portno, u8 **out_buf, s32 *temp_len) {
 
@@ -5374,7 +5375,7 @@ int post(char *host, int portno, u8 **out_buf, s32 *temp_len) {
     }
   }
 
-  char *body = malloc(8192);
+  char *body = malloc(*temp_len+1);
   snprintf(body, *temp_len, "%s", hardcoded_src);
   if (DEBUG_POST) {
     printf("------------------------------\n");
@@ -5390,7 +5391,7 @@ int post(char *host, int portno, u8 **out_buf, s32 *temp_len) {
   int sockfd, bytes, sent, received, total, message_size;
   char *message;
 
-  int response_sz = 8192;
+  int response_sz = RESPONSE_SIZE;
   char *response = malloc(response_sz);
 
   /* How big is the message? */
@@ -5464,7 +5465,6 @@ int post(char *host, int portno, u8 **out_buf, s32 *temp_len) {
   } while (received < total);
 
   if (received == total){
-    // printf("Response:\n%s\n",response);
     error("ERROR storing complete response from socket");
   }
   response[received] = '\0';
